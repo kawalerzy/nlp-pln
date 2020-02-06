@@ -5,7 +5,7 @@ import requests
 from requests import Session
 
 from config import PAGES_PATH, DATA_PATH
-from scraping.pilkanoznapl import MAX_PAGE_NUM
+from scraping.pilkanoznapl import MAX_PAGE_NUM, categories, page_limits
 
 
 def create_test_html() -> None:
@@ -22,9 +22,9 @@ def create_test_html() -> None:
         file.write(article_response.text)
 
 
-def get_search_params(page_id: int) -> dict:
+def get_search_params(page_id: int, category_id: int) -> dict:
     return {
-        "kategoria": "64",
+        "kategoria": str(category_id),
         "od": "7",
         "option": "com_wyszukiwarka_art",
         "task": "",
@@ -35,7 +35,7 @@ def get_search_params(page_id: int) -> dict:
         "kanal": "",
         "sekcja": "20",
         "strona": str(page_id),
-        "kategorie": "64",
+        "kategorie": str(category_id),
         "maxstrona": str(MAX_PAGE_NUM),
         "sortOrder": "desc",
         "sortColumn": "c.created"
@@ -48,25 +48,42 @@ def get_headers():
     }
 
 
-def save_next_page(page_id: int, session: Session):
-    path = os.path.join(DATA_PATH, 'pilkanoznapl', 'raw', "{}.html".format(page_id))
+def save_next_page(page_id: int, category_id: int, session: Session):
+    folder_name = categories[category_id]
+    path = os.path.join(DATA_PATH, 'pilkanoznapl', folder_name, "{}.html".format(page_id))
     if os.path.exists(path):
         print('Page: {} already saved'.format(page_id))
         return
 
     headers = get_headers()
-    search_params = get_search_params(page_id)
-    url = 'https://pilkanozna.pl/index.php?option=com_wyszukiwarka_art&sekcja=20&kategoria=64&Itemid=9'
+    search_params = get_search_params(page_id, category_id)
+    url = 'https://pilkanozna.pl/index.php?option=com_wyszukiwarka_art&sekcja=20&kategoria={}&Itemid=9'.format(
+        category_id)
     response = session.post(url, headers=headers, data=search_params)
 
     with open(path, 'w') as file:
         file.write(response.text)
 
 
-def save_archive_range(from_range=0, to_range=MAX_PAGE_NUM):
+def save_archive_range(from_range=0, category_id=64):
     session = requests.Session()
-    for page_id in range(from_range, to_range):
+    category_name = categories[category_id]
+    max_range = page_limits[category_id]
+
+    for page_id in range(from_range, max_range):
         start = datetime.now()
-        save_next_page(page_id, session)
+        save_next_page(page_id, category_id, session)
         end = datetime.now()
-        print('Saved page: {} in {}'.format(page_id, end - start))
+        print('{}: Saved page {} in {}'.format(category_name, page_id, end - start))
+
+
+def save_categories():
+    for category_id in categories.keys():
+        category_name = categories[category_id]
+        category_data_dir = os.path.join(DATA_PATH, 'pilkanoznapl', category_name)
+
+        if not os.path.exists(category_data_dir):
+            os.mkdir(category_data_dir)
+
+        print('Scrapping category: {}'.format(category_id))
+        save_archive_range(1, category_id)

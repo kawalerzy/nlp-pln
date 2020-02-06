@@ -5,10 +5,10 @@ import pandas as pd
 from bs4 import BeautifulSoup
 
 from config import DATA_PATH
-from scraping.pilkanoznapl import columns, base_url
+from scraping.pilkanoznapl import columns, base_url, categories
 
 
-def parse_table(html: str) -> pd.DataFrame:
+def parse_table(html: str, category_id: int) -> pd.DataFrame:
     soup = BeautifulSoup(html, 'lxml')
     rows = soup.find('table', {'class': 'adminlist'}).find_all("tr")
 
@@ -22,7 +22,7 @@ def parse_table(html: str) -> pd.DataFrame:
             link = cell.find('a')
             if link is not None:
                 href = link['href']
-                if href != 'javascript:kat(64)':
+                if href != 'javascript:kat({})'.format(category_id):
                     entry_dict[columns[count]] = base_url + href
                     count += 1
 
@@ -35,31 +35,43 @@ def parse_table(html: str) -> pd.DataFrame:
     return df
 
 
-def parse_archive() -> None:
-    out_path = os.path.join(DATA_PATH, 'pilkanoznapl', 'table_data.csv')
-    in_dir = os.path.join(DATA_PATH, 'pilkanoznapl', 'raw')
+def parse_category(category_id: int) -> None:
+    category_name = categories[category_id]
+    out_path = os.path.join(DATA_PATH, 'pilkanoznapl', '{}_data.csv'.format(category_name))
+    in_dir = os.path.join(DATA_PATH, 'pilkanoznapl', category_name)
+
+    if os.path.exists(out_path):
+        print('Category {} seems to be already parsed'.format(category_name))
+        return
 
     df = pd.DataFrame(columns=columns)
-    for file in sorted(os.listdir(in_dir)):
+    for file in os.listdir(in_dir):
         try:
             start = datetime.now()
             path = os.path.join(in_dir, file)
             with open(path, 'r') as page:
                 text = page.read()
-                df = df.append(parse_table(text))
+                df = df.append(parse_table(text, category_id))
             end = datetime.now()
             print('Parsed file {} in {}'.format(file, end - start))
         except Exception as err:
             print("Unexpected error while parsing file: {}".format(file))
             print(err)
 
-    df.to_csv(out_path, index=True)
-
-
-def prepare_table() -> None:
-    in_path = os.path.join(DATA_PATH, 'pilkanoznapl', 'table_data.csv')
-    out_path = os.path.join(DATA_PATH, 'pilkanoznapl', 'sorted_table_data.csv')
-    df = pd.read_csv(in_path)
-    df = df.drop(columns='index')
     df = df.sort_values('date')
-    df.to_csv(out_path, index=False, header=True)
+    df.to_csv(out_path, sep='|', index=False)
+
+
+def parse_categories() -> None:
+    for category_id in categories.keys():
+        category_name = categories[category_id]
+        print('Parsing category: {}'.format(category_name))
+        parse_category(category_id)
+
+
+def merge_categories() -> None:
+    out_path = os.path.join(DATA_PATH, 'pilkanoznapl', 'merged_data.csv')
+    paths = [os.path.join(DATA_PATH, 'pilkanoznapl', '{}_data.csv'.format(name)) for name in categories.values()]
+    combined_df = pd.concat([pd.read_csv(f, sep='|') for f in paths])
+    combined_df = combined_df.sort_values('date')
+    combined_df.to_csv(out_path, sep='|', index=False)
