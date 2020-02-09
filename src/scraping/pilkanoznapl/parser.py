@@ -3,6 +3,7 @@ from datetime import datetime
 
 import pandas as pd
 from bs4 import BeautifulSoup
+from pandas import Series
 
 from config import DATA_PATH
 from scraping.pilkanoznapl import columns, base_url, categories
@@ -75,3 +76,29 @@ def merge_categories() -> None:
     combined_df = pd.concat([pd.read_csv(f, sep='|') for f in paths])
     combined_df = combined_df.sort_values('date')
     combined_df.to_csv(out_path, sep='|', index=False)
+
+
+def extract_id_from_url(url: str) -> str:
+    article_str = url.split('/')[-1]
+    article_id = article_str.split('-')[0]
+    return article_id
+
+
+def assign_id(row: Series) -> str:
+    return extract_id_from_url(row['link'])
+
+
+def assign_id_to_articles(df: pd.DataFrame) -> pd.DataFrame:
+    df['article_id'] = df.apply(assign_id, axis=1)
+    return df
+
+
+def format_data():
+    pth = os.path.join(DATA_PATH, 'pilkanoznapl', 'merged_data.csv')
+    df = pd.read_csv(pth, sep='|')
+    df = assign_id_to_articles(df)
+    df.to_csv(pth, sep='|', index=False)
+
+
+merge_categories()
+format_data()

@@ -87,3 +87,10 @@ def save_categories():
 
         print('Scrapping category: {}'.format(category_id))
         save_archive_range(1, category_id)
+
+
+def save_article(url: str, path: str) -> None:
+    response = requests.get(url)
+    with open(path, 'w') as file:
+        file.write(response.text)
+
