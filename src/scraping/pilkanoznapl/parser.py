@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime
 
 import pandas as pd
@@ -7,6 +8,16 @@ from pandas import Series
 
 from config import DATA_PATH
 from scraping.pilkanoznapl import columns, base_url, categories
+
+
+def parse_article(html: str) -> dict:
+    soup = BeautifulSoup(html, 'lxml')
+    content = soup.find_all('td', {'valign': 'top'})[1]
+    raw_text = '.'.join(content.find_all(text=True))
+    raw_links_list = soup.findAll('a', attrs={'href': re.compile("^http://")})
+    links_list = [link.get('href') for link in raw_links_list]
+    article_content_dict = {'raw_text': raw_text, 'links_list': links_list}
+    return article_content_dict
 
 
 def parse_table(html: str, category_id: int) -> pd.DataFrame:
