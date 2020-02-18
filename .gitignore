@@ -1,5 +1,6 @@
 .idea/
-data/
+/data
+/db-data
  Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
@@ -130,3 +131,4 @@ dmypy.json
 # Pyre type checker
 .pyre/
 /auth.json
+/database.env

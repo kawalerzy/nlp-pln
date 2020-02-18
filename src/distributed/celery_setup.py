@@ -1,5 +1,4 @@
 from config import CELERY_BROKER_URL, CELERY_RESULT_BACKEND
-
 from scraping.pilkanoznapl.tasks import celery
 
 
