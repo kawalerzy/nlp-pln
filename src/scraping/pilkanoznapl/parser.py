@@ -1,23 +1,49 @@
 import os
 import re
 from datetime import datetime
+from typing import List
+from urllib.parse import urlparse
 
 import pandas as pd
 from bs4 import BeautifulSoup
 from pandas import Series
 
 from config import DATA_PATH
-from scraping.pilkanoznapl import columns, base_url, categories
+from scraping.pilkanoznapl import columns, base_url, categories, months
+
+
+def parse_article_range(article_paths: List[str]) -> pd.DataFrame:
+    parsed_columns = ['id', 'raw_text', 'links_list']
+    df = pd.DataFrame(columns=parsed_columns)
+
+    for num, path in enumerate(article_paths):
+        entry = {'id': os.path.basename(path).split('.')[0]}
+        if num % 100 == 0:
+            print('Parsed: {}/{}'.format(num, len(article_paths)))
+        with open(path, 'r') as article:
+            html = article.read()
+            parsed_article_dict = parse_article(html)
+            entry.update(parsed_article_dict)
+            df = df.append(entry, ignore_index=True)
+
+    return df
 
 
 def parse_article(html: str) -> dict:
     soup = BeautifulSoup(html, 'lxml')
-    content = soup.find_all('td', {'valign': 'top'})[1]
-    raw_text = '.'.join(content.find_all(text=True))
-    raw_links_list = soup.findAll('a', attrs={'href': re.compile("^http://")})
-    links_list = [link.get('href') for link in raw_links_list]
-    article_content_dict = {'raw_text': raw_text, 'links_list': links_list}
-    return article_content_dict
+    try:
+        content = soup.find_all('td', {'valign': 'top'})
+        date = parse_date(content[0].text)
+        article_content = content[1]
+        raw_text = '.'.join(article_content.find_all(text=True))
+        raw_links_list = soup.findAll('a', attrs={'href': re.compile("^http://")})
+        links_list = [link.get('href') for link in raw_links_list if
+                      urlparse(link.get('href')).netloc not in ['pilkanozna.pl', 'www.alexlopezit.com']]
+        article_content_dict = {'date': date, 'raw_text': raw_text, 'links_list': links_list}
+        return article_content_dict
+    except Exception as ex:
+        print(ex, html)
+        return {}
 
 
 def parse_table(html: str, category_id: int) -> pd.DataFrame:
@@ -100,16 +126,19 @@ def assign_id(row: Series) -> str:
 
 
 def assign_id_to_articles(df: pd.DataFrame) -> pd.DataFrame:
-    df['article_id'] = df.apply(assign_id, axis=1)
+    df['id'] = df.apply(assign_id, axis=1)
     return df
 
 
 def format_data():
-    pth = os.path.join(DATA_PATH, 'pilkanoznapl', 'merged_data.csv')
+    pth = os.path.join(DATA_PATH, 'merged_data.csv')
     df = pd.read_csv(pth, sep='|')
     df = assign_id_to_articles(df)
     df.to_csv(pth, sep='|', index=False)
 
 
-merge_categories()
-format_data()
+def parse_date(date_string: str) -> datetime:
+    date_string = re.compile(r'[\n\t]').sub("", date_string)
+    date = date_string.split(' ')
+    time = date[4].split(':')
+    return datetime(int(date[3]), months[date[2]], int(date[1]), int(time[0]), int(time[1]))

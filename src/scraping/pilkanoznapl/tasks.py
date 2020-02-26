@@ -1,11 +1,16 @@
 import os
+import time
 from datetime import datetime
 from typing import List
 
+import pandas as pd
 from celery import Celery, group
 
-from config import DATA_PATH
-from scraping.pilkanoznapl.parser import extract_id_from_url
+from config.dir import DATA_PATH
+from db import Article
+from distributed import DBTask
+from scraping.pilkanoznapl import categories_map
+from scraping.pilkanoznapl.parser import extract_id_from_url, parse_article_range
 from scraping.pilkanoznapl.scrapper import save_article
 
 celery = Celery(__name__, autofinalize=False)
@@ -33,3 +38,47 @@ def scrap_single_article(url: str):
 def scrap_articles(links: List[str]):
     group(scrap_single_article.s(url) for url in links)()
     return
+
+
+@celery.task(name='PARSE_ARTICLE_CHUNK')
+def parse_articles_range(article_paths: List[str], file_name: str):
+    print('Received parsing task: {}'.format(file_name))
+    out_path = os.path.join(DATA_PATH, file_name + '.csv')
+    articles_df = parse_article_range(article_paths)
+    articles_df.to_csv(out_path, sep='|', index=False)
+
+    return
+
+
+@celery.task(base=DBTask, bind=True)
+def merge_meta_and_articles(self):
+    paths = [os.path.join(DATA_PATH, 'parsed', f'parsed_{df_id}.csv') for df_id in range(0, 12)]
+    article_meta_data = pd.read_csv(os.path.join(DATA_PATH, 'merged_data.csv'), sep='|')
+    article_data = pd.concat([pd.read_csv(f, sep='|') for f in paths])
+    merged = article_meta_data.merge(article_data, on='id')
+    merged = merged.rename(
+        columns={
+            'links_list': 'external_links',
+            'raw_text': 'text'
+        }
+    )
+    merged.category = merged.category.map(categories_map)
+    self.engine.execute(
+        Article.__table__.insert(),
+        merged.to_dict(orient="records")
+    )
+
+
+@celery.task(base=DBTask, bind=True)
+def load_articles(self):
+    merged_data = os.path.join(DATA_PATH, 'merged_data.csv')
+    df = pd.read_csv(merged_data, sep='|')
+    df.category = df.category.map(categories_map)
+    t0 = time.time()
+    self.engine.execute(
+        Article.__table__.insert(),
+        df.to_dict(orient="records")
+    )
+    print(f'Inserted {len(df)} in: {time.time() - t0}')
+
+# merge_meta_and_articles()

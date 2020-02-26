@@ -1,0 +1,17 @@
+version: '3.4'
+services:
+  redis:
+    image: 'redis:alpine'
+    container_name: 'nlp-redis'
+    ports:
+      - '6379:6379'
+    network_mode: host
+  postgres:
+    image: "postgres"
+    container_name: "nlp-postgres"
+    ports:
+      - '5433:5432'
+    env_file:
+      - ../database.env
+    volumes:
+      - ../db-data:/var/lib/postgresql/data/

@@ -4,7 +4,7 @@ from datetime import datetime
 import requests
 from requests import Session
 
-from config import PAGES_PATH, DATA_PATH
+from config.dir import DATA_PATH, PAGES_PATH
 from scraping.pilkanoznapl import MAX_PAGE_NUM, categories, page_limits
 
 
@@ -93,4 +93,3 @@ def save_article(url: str, path: str) -> None:
     response = requests.get(url)
     with open(path, 'w') as file:
         file.write(response.text)
-
