@@ -15,7 +15,7 @@ class DBTask(Task, ABC):
     _session: scoped_session = None
     _engine: Engine = None
 
-    def after_return(self, *args, **kwargs):
+    def after_return(self, status, retval, task_id, args, kwargs, einfo):
         if self._session is not None:
             self._session.remove()
 
