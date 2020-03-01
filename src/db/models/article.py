@@ -16,3 +16,4 @@ class Article(Base):
     link = Column(String(300))
     category = Column(category_enum)
     text = Column(TEXT)
+    summary = Column(TEXT)
