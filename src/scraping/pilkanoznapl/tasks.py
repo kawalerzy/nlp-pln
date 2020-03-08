@@ -1,16 +1,20 @@
 import os
 import time
 from datetime import datetime
+from os.path import join
 from typing import List
 
 import pandas as pd
+from bs4 import BeautifulSoup
 from celery import Celery, group
+from pandas import Series
+from sqlalchemy import bindparam
 
 from config.dir import DATA_PATH
-from db import Article
-from distributed import DBTask
+from db import Article, get_engine_session
+from distributed import DBTask, SQLALCHEMY_ENGINE_STR
 from scraping.pilkanoznapl import categories_map
-from scraping.pilkanoznapl.parser import extract_id_from_url, parse_article_range
+from scraping.pilkanoznapl.parser import extract_id_from_url, parse_article_range, parse_article
 from scraping.pilkanoznapl.scrapper import save_article
 
 celery = Celery(__name__, autofinalize=False)
@@ -80,5 +84,3 @@ def load_articles(self):
         df.to_dict(orient="records")
     )
     print(f'Inserted {len(df)} in: {time.time() - t0}')
-
-# merge_meta_and_articles()

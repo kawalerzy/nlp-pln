@@ -2,7 +2,6 @@ import os
 import re
 from datetime import datetime
 from typing import List
-from urllib.parse import urlparse
 
 import pandas as pd
 from bs4 import BeautifulSoup
@@ -13,7 +12,7 @@ from scraping.pilkanoznapl import columns, base_url, categories, months
 
 
 def parse_article_range(article_paths: List[str]) -> pd.DataFrame:
-    parsed_columns = ['id', 'raw_text', 'links_list']
+    parsed_columns = ['id', 'raw_text', 'source']
     df = pd.DataFrame(columns=parsed_columns)
 
     for num, path in enumerate(article_paths):
@@ -23,27 +22,71 @@ def parse_article_range(article_paths: List[str]) -> pd.DataFrame:
         with open(path, 'r') as article:
             html = article.read()
             parsed_article_dict = parse_article(html)
-            entry.update(parsed_article_dict)
+            entry.update()
             df = df.append(entry, ignore_index=True)
 
     return df
 
 
-def parse_article(html: str) -> dict:
+def parse_article(html: str) -> (str, str):
     soup = BeautifulSoup(html, 'lxml')
-    try:
-        content = soup.find_all('td', {'valign': 'top'})
-        date = parse_date(content[0].text)
-        article_content = content[1]
-        raw_text = '.'.join(article_content.find_all(text=True))
-        raw_links_list = soup.findAll('a', attrs={'href': re.compile("^http://")})
-        links_list = [link.get('href') for link in raw_links_list if
-                      urlparse(link.get('href')).netloc not in ['pilkanozna.pl', 'www.alexlopezit.com']]
-        article_content_dict = {'date': date, 'raw_text': raw_text, 'links_list': links_list}
-        return article_content_dict
-    except Exception as ex:
-        print(ex, html)
-        return {}
+    soup.script.decompose()
+    text_list = soup.find_all(text=True)
+    text_source_tuple = cleanup_text(text_list)
+    return text_source_tuple
+
+
+def cleanup_text(text_list: List[str]) -> (str, str):
+    """
+    Remove invalid and cleanup valid entries.
+    :param text_list: list with article text entries
+    :return: dict with article text and article source
+    """
+    text_list = list(filter(lambda x: x != '\n', text_list))
+    text_list = list(map(cleanup_text_entry, text_list))
+    text_list = remove_everything_after_source(text_list)
+    text_list = remove_facebook_comments(text_list)
+    source = text_list[-1]
+    if len(source) > 50:
+        # Something went wrong, irregular text
+        # set source to None and do not truncate text_list
+        # for further investigation
+        return ' '.join(text_list), None
+    source = source.replace('Źródło:', '').strip()
+    return ' '.join(text_list[:-1]), source
+
+
+def remove_facebook_comments(text_list: List[str]) -> List[str]:
+    """
+    Remove all text entries after (and including) Facebook Comments entry.
+    After removing, the last entry in list should be the article author entry
+    :param text_list:
+    :return: text_list without Facebook Comments entry
+    """
+    fb_token = "Facebook Social Comments"
+    fb_entry_index = next((index for index, text in enumerate(text_list) if fb_token in text), len(text_list))
+    return text_list[:fb_entry_index]
+
+
+def remove_everything_after_source(text_list: List[str]) -> List[str]:
+    """
+    Remove all text entries after (and including) Facebook Comments entry.
+    After removing, the last entry in list should be the article author entry
+    :param text_list:
+    :return: text_list without Facebook Comments entry
+    """
+    source_token = "Źródło:"
+    index = next((index for index, text in enumerate(text_list) if source_token in text), len(text_list))
+    return text_list[:index + 1] if index is not None else text_list
+
+
+def cleanup_text_entry(entry: str) -> str:
+    """
+    Strip whitespace and change non-breaking space to normal space
+    :param entry: text entry
+    :return: cleaned text
+    """
+    return entry.replace('\xa0', ' ').strip()
 
 
 def parse_table(html: str, category_id: int) -> pd.DataFrame:
