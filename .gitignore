@@ -1,5 +1,7 @@
 .idea/
 /data
+migration_errors.log
+sys.log
 /db-data
  Byte-compiled / optimized / DLL files
 __pycache__/
