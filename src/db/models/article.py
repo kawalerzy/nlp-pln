@@ -17,3 +17,5 @@ class Article(Base):
     category = Column(category_enum)
     text = Column(TEXT)
     summary = Column(TEXT)
+    html = Column(TEXT)
+    source = Column(String(TEXT))

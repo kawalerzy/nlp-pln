@@ -7,5 +7,5 @@ alembic revision --autogenerate -m "add summary column"
 ```
 Adjust generated migration, if needed. Run upgrade command
 ```
-alembic upgrade hed
+alembic upgrade head
 ```
